@@ -8,8 +8,41 @@
 </head>
 <body>
     <div class="game-container">
-        <h1></h1>
+        <!-- Canvas do Jogo -->
         <canvas id="pongCanvas" width="800" height="400"></canvas>
+
+        <!-- Painel de Controles Moderno -->
+        <div class="control-panel">
+            <div class="control-group">
+                <button id="btnPlayPause">PAUSE</button>
+                <button id="btnStop">PARAR</button>
+            </div>
+
+            <div class="control-group">
+                <label for="difficultySelect">Dif:</label>
+                <select id="difficultySelect">
+                    <option value="easy">Fácil</option>
+                    <option value="medium" selected>Médio</option>
+                    <option value="hard">Difícil</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="scoreLimitSelect">Limite:</label>
+                <select id="scoreLimitSelect">
+                    <option value="5">5 Pts</option>
+                    <option value="10" selected>10 Pts</option>
+                    <option value="20">20 Pts</option>
+                    <option value="unlimited">Infinito</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="timerToggle">Tempo:</label>
+                <input type="checkbox" id="timerToggle">
+                <span id="timerDisplay">00:00</span>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>
