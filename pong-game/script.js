@@ -1,6 +1,20 @@
 const canvas = document.getElementById("pongCanvas");
 const ctx = canvas.getContext("2d");
 
+// Elementos de Controle
+const btnPlayPause = document.getElementById("btnPlayPause");
+const btnStop = document.getElementById("btnStop");
+const difficultySelect = document.getElementById("difficultySelect");
+const scoreLimitSelect = document.getElementById("scoreLimitSelect");
+const timerToggle = document.getElementById("timerToggle");
+const timerDisplay = document.getElementById("timerDisplay");
+
+let isRunning = true; // Estado do Jogo (Play/Pause)
+
+// Configuração do Cronômetro
+let secondsElapsed = 0;
+let timerInterval = null;
+
 // Configuração da Bola
 const ball = {
     x: canvas.width / 2,
@@ -32,13 +46,11 @@ const ai = {
     color: "WHITE"
 };
 
-// Desenhar Retângulos (Raquetes)
 function drawRect(x, y, w, h, color) {
     ctx.fillStyle = color;
     ctx.fillRect(x, y, w, h);
 }
 
-// Desenhar Círculo (Bola)
 function drawCircle(x, y, r, color) {
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -47,38 +59,29 @@ function drawCircle(x, y, r, color) {
     ctx.fill();
 }
 
-// Desenhar Texto (Placar)
 function drawText(text, x, y, color) {
     ctx.fillStyle = color;
     ctx.font = "45px 'Courier New'";
     ctx.fillText(text, x, y);
 }
 
-// Desenhar Linha Central Pontilhada
 function drawNet() {
     for (let i = 0; i <= canvas.height; i += 15) {
         drawRect(canvas.width / 2 - 1, i, 2, 10, "WHITE");
     }
 }
 
-// Controle do Jogador pelo Teclado
 let upPressed = false;
 let downPressed = false;
 
 window.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowUp") {
-        upPressed = true;
-    } else if (e.key === "ArrowDown") {
-        downPressed = true;
-    }
+    if (e.key === "ArrowUp") upPressed = true;
+    else if (e.key === "ArrowDown") downPressed = true;
 });
 
 window.addEventListener("keyup", (e) => {
-    if (e.key === "ArrowUp") {
-        upPressed = false;
-    } else if (e.key === "ArrowDown") {
-        downPressed = false;
-    }
+    if (e.key === "ArrowUp") upPressed = false;
+    else if (e.key === "ArrowDown") downPressed = false;
 });
 
 function movePlayer() {
@@ -89,7 +92,6 @@ function movePlayer() {
     }
 }
 
-// Detecção de Colisão entre Bola e Raquete
 function collision(b, r) {
     b.top = b.y - b.radius;
     b.bottom = b.y + b.radius;
@@ -104,7 +106,6 @@ function collision(b, r) {
     return b.right > r.left && b.bottom > r.top && b.left < r.right && b.top < r.bottom;
 }
 
-// Resetar a Bola após um Ponto
 function resetBall() {
     ball.x = canvas.width / 2;
     ball.y = canvas.height / 2;
@@ -112,85 +113,146 @@ function resetBall() {
     ball.speed = 5;
 }
 
-// Atualizar Posições e Lógica do Jogo
+function resetGame() {
+    player.score = 0;
+    ai.score = 0;
+    resetBall();
+    player.y = canvas.height / 2 - 40;
+    ai.y = canvas.height / 2 - 40;
+    secondsElapsed = 0;
+    updateTimerDisplay();
+}
+
+// Lógica de Dificuldade da IA
+function getAISpeed() {
+    let diff = difficultySelect.value;
+    if (diff === 'easy') return 0.05;
+    if (diff === 'medium') return 0.09;
+    if (diff === 'hard') return 0.16;
+    return 0.09;
+}
+
 function update() {
-    // Movimento da raquete do jogador
+    if (!isRunning) return;
+
     movePlayer();
 
-    // Movimento da IA (Oponente) com velocidade ajustada
-    let aiSpeed = 0.08; // Quanto menor, mais fácil; quanto maior, mais difícil
+    // Movimento da IA baseado na dificuldade
+    let aiSpeed = getAISpeed();
     ai.y += (ball.y - (ai.y + ai.height / 2)) * aiSpeed;
 
-    // Limites da IA na tela
     if (ai.y < 0) ai.y = 0;
     if (ai.y > canvas.height - ai.height) ai.y = canvas.height - ai.height;
 
-    // Movimento da Bola
     ball.x += ball.velocityX;
     ball.y += ball.velocityY;
 
-    // Colisão com as paredes superior e inferior
     if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
         ball.velocityY = -ball.velocityY;
     }
 
-    // Determinar qual raquete a bola vai colidir
     let activePaddle = (ball.x < canvas.width / 2) ? player : ai;
 
     if (collision(ball, activePaddle)) {
-        // Calcular onde a bola bateu na raquete (efeito de ângulo)
         let collidePoint = ball.y - (activePaddle.y + activePaddle.height / 2);
         collidePoint = collidePoint / (activePaddle.height / 2);
-
-        // Ângulo de deflexão em radianos (máximo de 45 graus)
         let angleRad = (Math.PI / 4) * collidePoint;
-
-        // Mudar direção X da bola dependendo de quem rebateu
         let direction = (ball.x < canvas.width / 2) ? 1 : -1;
 
         ball.velocityX = direction * ball.speed * Math.cos(angleRad);
         ball.velocityY = ball.speed * Math.sin(angleRad);
-
-        // Aumentar a velocidade levemente a cada rebatida
         ball.speed += 0.4;
     }
 
-    // Atualizar Pontuação
+    // Checar Limite de Pontos
+    let scoreLimit = scoreLimitSelect.value;
     if (ball.x - ball.radius < 0) {
         ai.score++;
+        checkScoreLimit(scoreLimit);
         resetBall();
     } else if (ball.x + ball.radius > canvas.width) {
         player.score++;
+        checkScoreLimit(scoreLimit);
         resetBall();
     }
 }
 
-// Renderizar Elementos na Tela
+function checkScoreLimit(limit) {
+    if (limit !== "unlimited" && (player.score >= parseInt(limit) || ai.score >= parseInt(limit))) {
+        isRunning = false;
+        btnPlayPause.textContent = "INICIAR";
+        if (timerInterval) clearInterval(timerInterval);
+    }
+}
+
 function render() {
-    // Limpar o Canvas
     drawRect(0, 0, canvas.width, canvas.height, "BLACK");
-
-    // Desenhar a linha central
     drawNet();
-
-    // Desenhar Placares
     drawText(player.score, canvas.width / 4, canvas.height / 5, "WHITE");
     drawText(ai.score, 3 * canvas.width / 4, canvas.height / 5, "WHITE");
-
-    // Desenhar Raquetes
     drawRect(player.x, player.y, player.width, player.height, player.color);
     drawRect(ai.x, ai.y, ai.width, ai.height, ai.color);
-
-    // Desenhar Bola
     drawCircle(ball.x, ball.y, ball.radius, ball.color);
 }
 
-// Loop Principal do Jogo
 function gameLoop() {
     update();
     render();
 }
 
-// Rodar o jogo a ~60 quadros por segundo
-const fps = 60;
-setInterval(gameLoop, 1000 / fps);
+// --- Controles de Botões ---
+btnPlayPause.addEventListener("click", () => {
+    isRunning = !isRunning;
+    btnPlayPause.textContent = isRunning ? "PAUSE" : "INICIAR";
+    if (isRunning && timerToggle.checked && !timerInterval) {
+        startTimer();
+    } else if (!isRunning && timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+});
+
+btnStop.addEventListener("click", () => {
+    resetGame();
+    isRunning = false;
+    btnPlayPause.textContent = "INICIAR";
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+});
+
+// --- Controle do Cronômetro ---
+function updateTimerDisplay() {
+    let minutes = Math.floor(secondsElapsed / 60);
+    let seconds = secondsElapsed % 60;
+    timerDisplay.textContent = 
+        String(minutes).padStart(2, '0') + ":" + String(seconds).padStart(2, '0');
+}
+
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        if (isRunning) {
+            secondsElapsed++;
+            updateTimerDisplay();
+        }
+    }, 1000);
+}
+
+timerToggle.addEventListener("change", (e) => {
+    if (e.target.checked) {
+        secondsElapsed = 0;
+        updateTimerDisplay();
+        if (isRunning) startTimer();
+    } else {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        timerDisplay.textContent = "00:00";
+    }
+});
+
+// Iniciar Loop do Jogo (~60 FPS)
+setInterval(gameLoop, 1000 / 60);
