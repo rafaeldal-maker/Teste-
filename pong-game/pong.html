@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong do Atari</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .game-container {
+            text-align: center;
+        }
+
+        canvas {
+            background-color: #000;
+            border: 4px solid #fff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Painel de Controles */
+        .control-panel {
+            margin-top: 15px;
+            display: flex;
+            gap: 15px;
+            background-color: #222;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 2px solid #444;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 800px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.85rem;
+        }
+
+        button, select {
+            background-color: #0fff50;
+            color: #000;
+            border: none;
+            padding: 6px 12px;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover, select:hover {
+            background-color: #0cb339;
+            box-shadow: 0 0 8px rgba(15, 255, 80, 0.5);
+        }
+
+        select {
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+        }
+
+        #timerDisplay {
+            font-weight: bold;
+            color: #0fff50;
+            min-width: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Canvas do Jogo (Título removido) -->
+        <canvas id="pongCanvas" width="800" height="400"></canvas>
+
+        <!-- Painel de Controles Moderno -->
+        <div class="control-panel">
+            <div class="control-group">
+                <button id="btnPlayPause">PAUSE</button>
+                <button id="btnStop">PARAR</button>
+            </div>
+
+            <div class="control-group">
+                <label for="difficultySelect">Dif:</label>
+                <select id="difficultySelect">
+                    <option value="easy">Fácil</option>
+                    <option value="medium" selected>Médio</option>
+                    <option value="hard">Difícil</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="scoreLimitSelect">Limite:</label>
+                <select id="scoreLimitSelect">
+                    <option value="5">5 Pts</option>
+                    <option value="10" selected>10 Pts</option>
+                    <option value="20">20 Pts</option>
+                    <option value="unlimited">Infinito</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="timerToggle">Tempo:</label>
+                <input type="checkbox" id="timerToggle">
+                <span id="timerDisplay">00:00</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("pongCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Elementos de Controle
+        const btnPlayPause = document.getElementById("btnPlayPause");
+        const btnStop = document.getElementById("btnStop");
+        const difficultySelect = document.getElementById("difficultySelect");
+        const scoreLimitSelect = document.getElementById("scoreLimitSelect");
+        const timerToggle = document.getElementById("timerToggle");
+        const timerDisplay = document.getElementById("timerDisplay");
+
+        let isRunning = true; // Estado do Jogo (Play/Pause)
+        
+        // Configuração do Cronômetro
+        let secondsElapsed = 0;
+        let timerInterval = null;
+
+        // Configuração da Bola
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 10,
+            speed: 5,
+            velocityX: 5,
+            velocityY: 5,
+            color: "WHITE"
+        };
+
+        // Raquete do Jogador (Esquerda)
+        const player = {
+            x: 10,
+            y: canvas.height / 2 - 40,
+            width: 10,
+            height: 80,
+            score: 0,
+            color: "WHITE"
+        };
+
+        // Raquete do Oponente / IA (Direita)
+        const ai = {
+            x: canvas.width - 20,
+            y: canvas.height / 2 - 40,
+            width: 10,
+            height: 80,
+            score: 0,
+            color: "WHITE"
+        };
+
+        function drawRect(x, y, w, h, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, w, h);
+        }
+
+        function drawCircle(x, y, r, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2, false);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawText(text, x, y, color) {
+            ctx.fillStyle = color;
+            ctx.font = "45px 'Courier New'";
+            ctx.fillText(text, x, y);
+        }
+
+        function drawNet() {
+            for (let i = 0; i <= canvas.height; i += 15) {
+                drawRect(canvas.width / 2 - 1, i, 2, 10, "WHITE");
+            }
+        }
+
+        let upPressed = false;
+        let downPressed = false;
+
+        window.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowUp") upPressed = true;
+            else if (e.key === "ArrowDown") downPressed = true;
+        });
+
+        window.addEventListener("keyup", (e) => {
+            if (e.key === "ArrowUp") upPressed = false;
+            else if (e.key === "ArrowDown") downPressed = false;
+        });
+
+        function movePlayer() {
+            if (upPressed && player.y > 0) {
+                player.y -= 6;
+            } else if (downPressed && player.y < canvas.height - player.height) {
+                player.y += 6;
+            }
+        }
+
+        function collision(b, r) {
+            b.top = b.y - b.radius;
+            b.bottom = b.y + b.radius;
+            b.left = b.x - b.radius;
+            b.right = b.x + b.radius;
+
+            r.top = r.y;
+            r.bottom = r.y + r.height;
+            r.left = r.x;
+            r.right = r.x + r.width;
+
+            return b.right > r.left && b.bottom > r.top && b.left < r.right && b.top < r.bottom;
+        }
+
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.velocityX = -ball.velocityX;
+            ball.speed = 5;
+        }
+
+        function resetGame() {
+            player.score = 0;
+            ai.score = 0;
+            resetBall();
+            player.y = canvas.height / 2 - 40;
+            ai.y = canvas.height / 2 - 40;
+            secondsElapsed = 0;
+            updateTimerDisplay();
+        }
+
+        // Lógica de Dificuldade da IA
+        function getAISpeed() {
+            let diff = difficultySelect.value;
+            if (diff === 'easy') return 0.05;
+            if (diff === 'medium') return 0.09;
+            if (diff === 'hard') return 0.16; // Bem mais veloz
+            return 0.09;
+        }
+
+        function update() {
+            if (!isRunning) return;
+
+            movePlayer();
+
+            // Movimento da IA baseado na dificuldade
+            let aiSpeed = getAISpeed();
+            ai.y += (ball.y - (ai.y + ai.height / 2)) * aiSpeed;
+
+            if (ai.y < 0) ai.y = 0;
+            if (ai.y > canvas.height - ai.height) ai.y = canvas.height - ai.height;
+
+            ball.x += ball.velocityX;
+            ball.y += ball.velocityY;
+
+            if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
+                ball.velocityY = -ball.velocityY;
+            }
+
+            let activePaddle = (ball.x < canvas.width / 2) ? player : ai;
+
+            if (collision(ball, activePaddle)) {
+                let collidePoint = ball.y - (activePaddle.y + activePaddle.height / 2);
+                collidePoint = collidePoint / (activePaddle.height / 2);
+                let angleRad = (Math.PI / 4) * collidePoint;
+                let direction = (ball.x < canvas.width / 2) ? 1 : -1;
+
+                ball.velocityX = direction * ball.speed * Math.cos(angleRad);
+                ball.velocityY = ball.speed * Math.sin(angleRad);
+                ball.speed += 0.4;
+            }
+
+            // Checar Limite de Pontos
+            let scoreLimit = scoreLimitSelect.value;
+            if (ball.x - ball.radius < 0) {
+                ai.score++;
+                checkScoreLimit(scoreLimit);
+                resetBall();
+            } else if (ball.x + ball.radius > canvas.width) {
+                player.score++;
+                checkScoreLimit(scoreLimit);
+                resetBall();
+            }
+        }
+
+        function checkScoreLimit(limit) {
+            if (limit !== "unlimited" && (player.score >= parseInt(limit) || ai.score >= parseInt(limit))) {
+                isRunning = false;
+                btnPlayPause.textContent = "INICIAR";
+                if(timerInterval) clearInterval(timerInterval);
+            }
+        }
+
+        function render() {
+            drawRect(0, 0, canvas.width, canvas.height, "BLACK");
+            drawNet();
+            drawText(player.score, canvas.width / 4, canvas.height / 5, "WHITE");
+            drawText(ai.score, 3 * canvas.width / 4, canvas.height / 5, "WHITE");
+            drawRect(player.x, player.y, player.width, player.height, player.color);
+            drawRect(ai.x, ai.y, ai.width, ai.height, ai.color);
+            drawCircle(ball.x, ball.y, ball.radius, ball.color);
+        }
+
+        function gameLoop() {
+            update();
+            render();
+        }
+
+        // --- Controles de Botões ---
+        btnPlayPause.addEventListener("click", () => {
+            isRunning = !isRunning;
+            btnPlayPause.textContent = isRunning ? "PAUSE" : "INICIAR";
+            if(isRunning && timerToggle.checked && !timerInterval) {
+                startTimer();
+            } else if (!isRunning && timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        });
+
+        btnStop.addEventListener("click", () => {
+            resetGame();
+            isRunning = false;
+            btnPlayPause.textContent = "INICIAR";
+            if(timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        });
+
+        // --- Controle do Cronômetro ---
+        function updateTimerDisplay() {
+            let minutes = Math.floor(secondsElapsed / 60);
+            let seconds = secondsElapsed % 60;
+            timerDisplay.textContent = 
+                String(minutes).padStart(2, '0') + ":" + String(seconds).padStart(2, '0');
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (isRunning) {
+                    secondsElapsed++;
+                    updateTimerDisplay();
+                }
+            }, 1000);
+        }
+
+        timerToggle.addEventListener("change", (e) => {
+            if (e.target.checked) {
+                secondsElapsed = 0;
+                updateTimerDisplay();
+                if (isRunning) startTimer();
+            } else {
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+                timerDisplay.textContent = "00:00";
+            }
+        });
+
+        // Iniciar Loop do Jogo (~60 FPS)
+        setInterval(gameLoop, 1000 / 60);
+    </script>
+</body>
+</html>
